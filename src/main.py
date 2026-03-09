@@ -11,6 +11,7 @@ logger = get_logger("Fisherman")
 # --- Configuration ---
 KEY_STARTSTOP = '|'
 KEY_ACTION = '\\'
+KEY_KILL_BLOODHUNTER = 'r'
 DETECTION_FILTERS = {
     1: {'vol': 2000.0, 'freq_range': (500.0, 1000.0)},
     2: {'vol': 1400.0, 'freq_range': (600.0, 1500.0)}
@@ -50,10 +51,20 @@ def wait(base_ms, mu_pct=0.10, sigma_pct=0.02):
 def interact():
     """Simulates a human-like keypress using the variance wait function."""
     logger.debug(f"Triggering action: Pressing '{KEY_ACTION}'")
+    # Hold the key down for a brief, randomized duration (e.g., ~50ms)
     py_kb.press(KEY_ACTION)
-    # Hold the key down for a brief, randomized duration (e.g., ~150ms)
-    wait(150, mu_pct=0.10, sigma_pct=0.02)
+    wait(50, mu_pct=0.10, sigma_pct=0.02)
     py_kb.release(KEY_ACTION)
+    wait(150, mu_pct=0.10, sigma_pct=0.2)
+
+def kill_bloodhunter():
+    """Simulates a human-like keypress using the variance wait function."""
+    logger.debug(f"Triggering action: Pressing '{KEY_KILL_BLOODHUNTER}'")
+    # Hold the key down for a brief, randomized duration (e.g., ~50ms)
+    py_kb.press(KEY_KILL_BLOODHUNTER)
+    wait(50, mu_pct=0.10, sigma_pct=0.02)
+    py_kb.release(KEY_KILL_BLOODHUNTER)
+    wait(150, mu_pct=0.10, sigma_pct=0.2)
 
 def worker():
     """Background thread that handles the continuous audio stream and analysis."""
@@ -79,6 +90,9 @@ def worker():
                 time_cast = time.time()
                 # Wait a moment before starting to look for new fish
                 wait(2000, mu_pct=0.10, sigma_pct=0.2)
+                # Sometimes bloodhunters can spawn and need to be dealth with
+                kill_bloodhunter()
+                wait(500, mu_pct=0.10, sigma_pct=0.2)
                 # Open the audio stream for listening to bobber sounds
                 stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
                 continue
@@ -118,9 +132,10 @@ def worker():
         logger.error(f"Worker encountered an error: {e}")
     finally:
         is_fishing = False
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
+        if 'stream' in locals():
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
         logger.info("Audio stream closed.")
 
 def main():
