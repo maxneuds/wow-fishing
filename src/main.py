@@ -21,8 +21,6 @@ WAIT_MAX = 25 # Maximum wait time to detect bobber sound in seconds
 # Audio stream parameters
 CHUNK = 4096
 FORMAT = pyaudio.paInt16
-CHANNELS = 1
-RATE = 44100
 
 # State variables
 is_running = False
@@ -70,6 +68,18 @@ def worker():
     """Background thread that handles the continuous audio stream and analysis."""
     logger.info("Worker started, opening audio stream...")
     p = pyaudio.PyAudio()
+    # List available input devices
+    logger.info("Available input devices:")
+    for i in range(p.get_device_count()):
+        device_info = p.get_device_info_by_index(i)
+        if device_info.get('maxInputChannels') > 0:
+            logger.info(f"  {i}: {device_info.get('name')} (channels: {device_info.get('maxInputChannels')})")
+    # Get default input device
+    default_device = p.get_default_input_device_info()
+    input_device_index = default_device.get('index')
+    input_channels = default_device.get('maxInputChannels')
+    input_sample_rate = int(default_device.get('defaultSampleRate'))
+    logger.info(f"Default input device: {default_device.get('name')} (index: {input_device_index}) (channels: {input_channels}, default sample rate: {input_sample_rate})")
     # Pre-calculate the minimum volume threshold from the detection filters for performance optimization
     vol_min_detection = min(filter['vol'] for filter in DETECTION_FILTERS.values())
     is_fishing = False
@@ -94,7 +104,7 @@ def worker():
                 kill_bloodhunter()
                 wait(500, mu_pct=0.10, sigma_pct=0.2)
                 # Open the audio stream for listening to bobber sounds
-                stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+                stream = p.open(format=FORMAT, channels=input_channels, rate=input_sample_rate, input=True, input_device_index=input_device_index, frames_per_buffer=CHUNK)
                 continue
             # Read audio data from the stream with error handling for overflow
             try:
@@ -108,7 +118,7 @@ def worker():
             if rms >= vol_min_detection:
                 # Compute the FFT and identify the peak frequency
                 fft_data = np.fft.rfft(audio_data)
-                fft_freqs = np.fft.rfftfreq(CHUNK, 1.0/RATE)
+                fft_freqs = np.fft.rfftfreq(CHUNK, 1.0/input_sample_rate)
                 peak_freq = fft_freqs[np.argmax(np.abs(fft_data))]
                 # Check each detection filter against the current RMS and peak frequency
                 for filter_id, filter_params in DETECTION_FILTERS.items():

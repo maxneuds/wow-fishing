@@ -7,13 +7,31 @@ logger = get_logger("Analyzer")
 CHUNK = 4096
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
-RATE = 44100
+RATE = 48000
 FILTER_VOLUME_THRESHOLD = 1000
 FILTER_FREQ = [500, 3000]
 
 def start_analyzer():
     p = pyaudio.PyAudio()
-    stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+    
+    # List available input devices
+    logger.info("Available input devices:")
+    for i in range(p.get_device_count()):
+        device_info = p.get_device_info_by_index(i)
+        if device_info.get('maxInputChannels') > 0:
+            logger.info(f"  {i}: {device_info.get('name')} (channels: {device_info.get('maxInputChannels')})")
+    
+    # Get default input device
+    default_device = p.get_default_output_device_info()
+    logger.info(f"Default input device: {default_device.get('name')} (index: {default_device.get('index')})")
+    
+    # Use the VB-Audio Virtual Cable output as input device
+    input_device_index = 27  # CABLE Output (VB-Audio Virtual Cable)
+    device_info = p.get_device_info_by_index(input_device_index)
+    logger.info(f"Using input device: {device_info.get('name')} (index: {input_device_index})")
+    logger.info(f"Device supports {device_info.get('maxInputChannels')} input channels, default sample rate: {device_info.get('defaultSampleRate')}")
+    
+    stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, input_device_index=input_device_index, frames_per_buffer=CHUNK)
     
     logger.info("Listening... Press Ctrl+C to stop.")
     
